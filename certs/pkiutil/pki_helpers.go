@@ -34,12 +34,13 @@ import (
 	"path/filepath"
 	"time"
 
+	"math"
+	"math/big"
+
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/util/validation"
 	certutil "k8s.io/client-go/util/cert"
 	"k8s.io/client-go/util/keyutil"
-	"math"
-	"math/big"
 	"sigs.k8s.io/etcdadm/apis"
 	"sigs.k8s.io/etcdadm/constants"
 )
@@ -67,7 +68,7 @@ func NewCertificateAuthority() (*x509.Certificate, *rsa.PrivateKey, error) {
 	config := certutil.Config{
 		CommonName: "etcd",
 	}
-	cert, err := certutil.NewSelfSignedCACert(config, key)
+	cert, err := NewSelfSignedCACert(config, key)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to create self-signed certificate [%v]", err)
 	}
@@ -321,6 +322,36 @@ func appendSANsToAltNames(altNames *certutil.AltNames, SANs []string, certName s
 // NewPrivateKey creates an RSA private key
 func NewPrivateKey() (*rsa.PrivateKey, error) {
 	return rsa.GenerateKey(cryptorand.Reader, rsaKeySize)
+}
+
+// NewSelfSignedCACert creates a new self-signed CA certificate
+func NewSelfSignedCACert(cfg certutil.Config, key crypto.Signer) (*x509.Certificate, error) {
+	serial, err := cryptorand.Int(cryptorand.Reader, new(big.Int).SetInt64(math.MaxInt64))
+	if err != nil {
+		return nil, err
+	}
+	if len(cfg.CommonName) == 0 {
+		return nil, errors.New("must specify a CommonName")
+	}
+
+	certTmpl := x509.Certificate{
+		Subject: pkix.Name{
+			CommonName:   cfg.CommonName,
+			Organization: cfg.Organization,
+		},
+		SerialNumber:          serial,
+		NotBefore:             time.Now().Add(-5 * time.Minute).UTC(),
+		NotAfter:              time.Now().Add(certificateValidity).UTC(),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		ExtKeyUsage:           []x509.ExtKeyUsage{},
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+	}
+	certDERBytes, err := x509.CreateCertificate(cryptorand.Reader, &certTmpl, &certTmpl, key.Public(), key)
+	if err != nil {
+		return nil, err
+	}
+	return x509.ParseCertificate(certDERBytes)
 }
 
 // NewSignedCert creates a signed certificate using the given CA certificate and key
