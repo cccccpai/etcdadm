@@ -35,12 +35,12 @@ import (
 // it to a longer time period, primarily because we don't have a nice
 // means of rotation.  This was historically one year, but we now set
 // it to two years, with kubernetes LTS proposing one year's support.
-var CertDuration = 2 * 365 * 24 * time.Hour
+var CertDuration = 100 * 365 * 24 * time.Hour
 
 // CertMinTimeLeft is the minimum amount of validity required on
 // a certificate to reuse it.  Because we set this (much) higher than
 // CertDuration, we will now always reissue certificates.
-var CertMinTimeLeft = 20 * 365 * 24 * time.Hour
+var CertMinTimeLeft = 200 * 365 * 24 * time.Hour
 
 // ParseHumanDuration parses a go-style duration string, but
 // recognizes additional suffixes: d means "day" and is interpreted as
